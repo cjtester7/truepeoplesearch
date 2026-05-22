@@ -1,5 +1,5 @@
-// Version: 6
-// Description: Implemented robust formatting for Gemini API 429 quota limits/credits, providing clear feedback with actionable instructions.
+// Version: 7
+// Description: Relaxed schema constraints and optimized public record grounding search prompts to ensure all matching results are successfully compiled and returned without being dropped due to missing optional fields.
 
 import express from "express";
 import path from "path";
@@ -66,25 +66,39 @@ async function startServer() {
 
       const client = getGeminiClient();
 
-      const prompt = `You are an expert public records investigator. Perform a live web search to look up people directory listings, census information, background details, and truepeoplesearch-style records based on the following criteria:
+      // Enriched query details for different search types to assist grounding execution
+      let searchDetails = query;
+      if (type === "phone") {
+        const cleanPhone = query.replace(/\D/g, "");
+        if (cleanPhone.length === 10) {
+          const f1 = `(${cleanPhone.slice(0, 3)}) ${cleanPhone.slice(3, 6)}-${cleanPhone.slice(6)}`;
+          const f2 = `${cleanPhone.slice(0, 3)}-${cleanPhone.slice(3, 6)}-${cleanPhone.slice(6)}`;
+          searchDetails = `${cleanPhone} (also formatted as "${f1}" or "${f2}")`;
+        }
+      }
+
+      const prompt = `You are an expert public records investigator. Perform a live Google search to look up people directory listings, whitepages records, and background registers based on the following criteria:
 Type of Search: ${type.toUpperCase()}
-Search Query: ${query}
+Search Query: ${searchDetails}
 Location Filter (City, State): ${location || "None specified"}
 
-Instruction:
-1. Use Google Search to find public records, public phone directories, address registers, whitepages indexes, and TruePeopleSearch links matches.
-2. Cross-reference the names, past addresses, relatives, and phone records to find up to 10 matching individuals.
-3. Consolidate and format the findings strictly as a JSON array where each object has these exact fields:
-   - name: string (Full name of the person)
-   - age: string (Age estimate, e.g. "45", or "N/A")
-   - currentAddress: string (Current or last known physical address)
-   - pastAddresses: array of strings (Past residential addresses, up to 5 items)
-   - phoneNumbers: array of strings (Known telephone numbers, up to 5 items)
-   - relatives: array of strings (Names of relatives, associates or family members, up to 5 items)
-   - emailAddresses: array of strings (Known email addresses, up to 3 items)
+Search Guidelines:
+1. Search public directories, whitepages registries, and people search sites (such as truepeoplesearch, fastpeoplesearch, whitepages, spokeo, clustrmaps, etc.) for records matching the criteria.
+2. Compile up to 10 potential matching individuals based on the search snippets and live details.
+3. INCLUDE every matching person found, even if their record is incomplete.
+4. CRITICAL: If a specific field (such as pastAddresses, phoneNumbers, relatives, or emailAddresses) is not available in the search snippets, use "N/A" for strings, or an empty array [] for arrays. DO NOT discard or skip the individual completely, and DO NOT leave fields out.
 
-If no matching people are found on public directories for this query, return an empty array [].
-Output must be strictly raw JSON formatted matching the schema.`;
+Consolidate and format the findings strictly as a JSON array where each object has these exact fields:
+   - name: string (Full name of the person)
+   - age: string (Age estimate, e.g. "45", or "N/A" if unknown)
+   - currentAddress: string (Current or last known physical address, or "N/A" if unknown)
+   - pastAddresses: array of strings (Past residential addresses, return empty array [] if none found)
+   - phoneNumbers: array of strings (Known telephone numbers, return empty array [] if none found)
+   - relatives: array of strings (Names of relatives, associates or family members, return empty array [] if none found)
+   - emailAddresses: array of strings (Known email addresses, return empty array [] if none found)
+
+If no matching people are found on public whitepages or directory web indexes, return an empty array [].
+Your final output must be strictly raw JSON matching the required schema. Ensure values are standard types.`;
 
       const response = await client.models.generateContent({
         model: "gemini-3.5-flash",
@@ -99,29 +113,31 @@ Output must be strictly raw JSON formatted matching the schema.`;
               properties: {
                 name: { type: Type.STRING, description: "Full name" },
                 age: { type: Type.STRING, description: "Age of the person, or 'N/A'" },
-                currentAddress: { type: Type.STRING, description: "Current/last known address" },
+                currentAddress: { type: Type.STRING, description: "Current/last known address, or 'N/A'" },
                 pastAddresses: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
-                  description: "List of previous addresses"
+                  description: "List of prior addresses"
                 },
                 phoneNumbers: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
-                  description: "Associated phone numbers"
+                  description: "List of associated phone numbers"
                 },
                 relatives: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
-                  description: "Full names of relatives or close associates"
+                  description: "List of relatives or close associates"
                 },
                 emailAddresses: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
-                  description: "Associated email addresses"
+                  description: "List of associated email addresses"
                 }
               },
-              required: ["name", "age", "currentAddress", "pastAddresses", "phoneNumbers", "relatives", "emailAddresses"]
+              // Only name is strictly required by the JSON schema parser to prevent discarding
+              // listings with missing fields during the validation stage.
+              required: ["name"]
             }
           }
         }
@@ -130,7 +146,21 @@ Output must be strictly raw JSON formatted matching the schema.`;
       const responseText = response.text || "[]";
       let results = [];
       try {
-        results = JSON.parse(responseText);
+        const parsed = JSON.parse(responseText);
+        if (Array.isArray(parsed)) {
+          // Safeguard the structure to always conform fully to the PersonRecord type interface
+          results = parsed.map((item: any) => ({
+            name: String(item.name || "").trim() || "Unknown Name",
+            age: String(item.age || "N/A"),
+            currentAddress: String(item.currentAddress || "N/A"),
+            pastAddresses: Array.isArray(item.pastAddresses) ? item.pastAddresses.map(String) : [],
+            phoneNumbers: Array.isArray(item.phoneNumbers) ? item.phoneNumbers.map(String) : [],
+            relatives: Array.isArray(item.relatives) ? item.relatives.map(String) : [],
+            emailAddresses: Array.isArray(item.emailAddresses) ? item.emailAddresses.map(String) : [],
+          }));
+        } else {
+          results = [];
+        }
       } catch (err) {
         console.error("Failed to parse Gemini response as JSON:", responseText, err);
         return res.status(500).json({ error: "The search engine response could not be parsed. Please try again." });
