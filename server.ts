@@ -1,3 +1,6 @@
+// Version: 6
+// Description: Implemented robust formatting for Gemini API 429 quota limits/credits, providing clear feedback with actionable instructions.
+
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
@@ -25,6 +28,20 @@ function getGeminiClient(): GoogleGenAI {
     });
   }
   return aiClient;
+}
+
+function formatGeminiError(error: any): string {
+  const errorStr = typeof error === "string" ? error : (error.message || String(error));
+  
+  if (errorStr.includes("429") || errorStr.includes("quota") || errorStr.includes("RESOURCE_EXHAUSTED") || errorStr.includes("limit")) {
+    return "Gemini API Quota Exceeded (429): Your Google AI Studio API key has reached its current daily or monthly usage quota limits, or search grounding requests are restricted. Please check your plan details under Google AI Studio > Settings > Billing, or use a billing-enabled key.";
+  }
+  
+  if (errorStr.includes("API_KEY_INVALID") || errorStr.includes("API key not valid")) {
+    return "Invalid Gemini API Key: The key provided in Settings > Secrets is not valid. Please check your API key in Google AI Studio.";
+  }
+  
+  return errorStr;
 }
 
 async function startServer() {
@@ -134,7 +151,7 @@ Output must be strictly raw JSON formatted matching the schema.`;
 
     } catch (error: any) {
       console.error("Gemini Search Grounding Error:", error);
-      res.status(500).json({ error: error.message || "An error occurred during search processing." });
+      res.status(500).json({ error: formatGeminiError(error) });
     }
   });
 

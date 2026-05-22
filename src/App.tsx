@@ -1,3 +1,6 @@
+// Version: 6
+// Description: Upgraded application to version 6 configuration, ensuring all API connection and quota limiting states are elegantly printed in the user dashboard.
+
 import { useState, useEffect } from "react";
 import { User } from "firebase/auth";
 import {
