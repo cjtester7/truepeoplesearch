@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { SearchType, SearchCriteria } from "../types";
 import { User, Phone, MapPin, Search, Sparkles } from "lucide-react";
 
@@ -8,18 +8,87 @@ interface SearchFormProps {
 }
 
 export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
-  const [activeTab, setActiveTab] = useState<SearchType>("name");
+  // Sync tab and field state from localStorage synchronously on mount
+  const [activeTab, setActiveTab] = useState<SearchType>(() => {
+    try {
+      const saved = localStorage.getItem("tps_activeTab");
+      return (saved as SearchType) || "name";
+    } catch {
+      return "name";
+    }
+  });
   
-  // Specific inputs state
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [location, setLocation] = useState("");
+  const [firstName, setFirstName] = useState(() => {
+    try {
+      return localStorage.getItem("tps_firstName") || "";
+    } catch {
+      return "";
+    }
+  });
 
-  const [phone, setPhone] = useState("");
+  const [lastName, setLastName] = useState(() => {
+    try {
+      return localStorage.getItem("tps_lastName") || "";
+    } catch {
+      return "";
+    }
+  });
 
-  const [street, setStreet] = useState("");
-  const [city, setCity] = useState("");
-  const [stateCode, setStateCode] = useState("");
+  const [location, setLocation] = useState(() => {
+    try {
+      return localStorage.getItem("tps_location") || "";
+    } catch {
+      return "";
+    }
+  });
+
+  const [phone, setPhone] = useState(() => {
+    try {
+      return localStorage.getItem("tps_phone") || "";
+    } catch {
+      return "";
+    }
+  });
+
+  const [street, setStreet] = useState(() => {
+    try {
+      return localStorage.getItem("tps_street") || "";
+    } catch {
+      return "";
+    }
+  });
+
+  const [city, setCity] = useState(() => {
+    try {
+      return localStorage.getItem("tps_city") || "";
+    } catch {
+      return "";
+    }
+  });
+
+  const [stateCode, setStateCode] = useState(() => {
+    try {
+      return localStorage.getItem("tps_stateCode") || "";
+    } catch {
+      return "";
+    }
+  });
+
+  // Automatically save state changes into localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem("tps_activeTab", activeTab);
+      localStorage.setItem("tps_firstName", firstName);
+      localStorage.setItem("tps_lastName", lastName);
+      localStorage.setItem("tps_location", location);
+      localStorage.setItem("tps_phone", phone);
+      localStorage.setItem("tps_street", street);
+      localStorage.setItem("tps_city", city);
+      localStorage.setItem("tps_stateCode", stateCode);
+    } catch (err) {
+      console.warn("Failed to write to localStorage:", err);
+    }
+  }, [activeTab, firstName, lastName, location, phone, street, city, stateCode]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
