@@ -88,7 +88,20 @@ export default function App() {
       }
     } catch (err: any) {
       console.error("Sign-In failed:", err);
-      setErrorMessage("Authentication failed. Please verify popup blocks or try again.");
+      let errMsg = "Authentication failed.";
+      
+      // Handle Firebase unauthorized domain error specifically
+      if (err.code === "auth/unauthorized-domain") {
+        errMsg = "Domain Authorized Issue: Your current deployment domain is not added to your Firebase project. Please go to Firebase Console > Authentication > Settings > Authorized Domains and add your Netlify domain (e.g., your-subdomain.netlify.app) to the list.";
+      } else if (err.code === "auth/popup-blocked") {
+        errMsg = "Popup Blocked: The Google Authenticator window was blocked by your browser. Please allow popups for this site and search again.";
+      } else if (err.code === "auth/popup-closed-by-user") {
+        errMsg = "Popup Closed: The Google Sign-In popup was closed before completion. Please retry.";
+      } else {
+        errMsg = `Authentication error (${err.code || "unknown"}): ${err.message || String(err)}. Please verify OAuth settings.`;
+      }
+      
+      setErrorMessage(errMsg);
     }
   };
 
