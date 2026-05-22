@@ -67,57 +67,77 @@ Instruction:
    - emailAddresses: array of strings (Known email addresses, up to 3 items)
 
 If no matching people are found on public directories for this query, return an empty array [].
-Output must be strictly raw JSON formatted matching the schema.`;
+Output must be strictly raw, valid JSON array. Do not include any conversational explanation before or after the JSON.`;
 
       const response = await client.models.generateContent({
         model: "gemini-3.5-flash",
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                name: { type: Type.STRING, description: "Full name" },
-                age: { type: Type.STRING, description: "Age of the person, or 'N/A'" },
-                currentAddress: { type: Type.STRING, description: "Current/last known address" },
-                pastAddresses: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                  description: "List of previous addresses"
-                },
-                phoneNumbers: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                  description: "Associated phone numbers"
-                },
-                relatives: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                  description: "Full names of relatives or close associates"
-                },
-                emailAddresses: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                  description: "Associated email addresses"
-                }
-              },
-              required: ["name", "age", "currentAddress", "pastAddresses", "phoneNumbers", "relatives", "emailAddresses"]
-            }
-          }
+          tools: [{ googleSearch: {} }]
         }
       });
 
-      const responseText = response.text || "[]";
-      let results = [];
-      try {
-        results = JSON.parse(responseText);
-      } catch (err) {
-        console.error("Failed to parse Gemini response as JSON:", responseText, err);
-        return res.status(500).json({ error: "The search engine response could not be parsed. Please try again." });
-      }
+      const responseText = response.text || "";
+      console.log("Raw Gemini Response received:", responseText);
+
+      let results: any[] = [];
+      const trimmed = responseText.trim();
+      
+      // Helper function to extract JSON array
+      const extractJsonArray = (text: string): any[] => {
+        try {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) return parsed;
+          if (parsed && typeof parsed === "object" && Array.isArray(parsed.results)) {
+            return parsed.results;
+          }
+        } catch {
+          // Fall through regex
+        }
+
+        // Try extracting using Markdown JSON regex block
+        const jsonBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+        const match = text.match(jsonBlockRegex);
+        if (match && match[1]) {
+          try {
+            const parsed = JSON.parse(match[1].trim());
+            if (Array.isArray(parsed)) return parsed;
+            if (parsed && typeof parsed === "object" && Array.isArray(parsed.results)) {
+              return parsed.results;
+            }
+          } catch {
+            // Fall through bracket extractor
+          }
+        }
+
+        // Attempt bracket extraction
+        const firstBracket = text.indexOf("[");
+        const lastBracket = text.lastIndexOf("]");
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+          try {
+            const candidate = text.slice(firstBracket, lastBracket + 1);
+            const parsed = JSON.parse(candidate);
+            if (Array.isArray(parsed)) return parsed;
+          } catch {
+            // Unable to parse
+          }
+        }
+
+        return [];
+      };
+
+      results = extractJsonArray(trimmed);
+
+      // Ensure that results array elements have default safe empty arrays if missing
+      results = results.map((item: any) => ({
+        name: String(item.name || "Unknown Individual"),
+        age: String(item.age || "N/A"),
+        currentAddress: String(item.currentAddress || "Not Available"),
+        pastAddresses: Array.isArray(item.pastAddresses) ? item.pastAddresses.map(String) : [],
+        phoneNumbers: Array.isArray(item.phoneNumbers) ? item.phoneNumbers.map(String) : [],
+        relatives: Array.isArray(item.relatives) ? item.relatives.map(String) : [],
+        emailAddresses: Array.isArray(item.emailAddresses) ? item.emailAddresses.map(String) : []
+      }));
 
       // Collect sources from search grounding metadata
       const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
