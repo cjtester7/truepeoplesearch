@@ -1,0 +1,6 @@
+{
+  "name": "TruePeopleSearch Explorer",
+  "description": "A directories search tool using live search grounding, with Firestore query caching and Google Sheets exports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

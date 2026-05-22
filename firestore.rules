@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Standard helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && (request.auth.token.email_verified == true);
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Entity validation helpers
+    function isValidPersonRecord(person) {
+      return person is map
+        && person.name is string
+        && person.name.size() <= 256
+        && person.age is string
+        && person.age.size() <= 50
+        && person.currentAddress is string
+        && person.currentAddress.size() <= 512
+        && person.pastAddresses is list
+        && person.pastAddresses.size() <= 50
+        && person.phoneNumbers is list
+        && person.phoneNumbers.size() <= 50
+        && person.relatives is list
+        && person.relatives.size() <= 50
+        && person.emailAddresses is list
+        && person.emailAddresses.size() <= 50;
+    }
+
+    function isValidSearchCacheItem(data) {
+      return data.keys().hasAll(['type', 'query', 'results', 'createdAt'])
+        && data.keys().size() <= 5  // Allow optional location
+        && data.type is string
+        && (data.type == 'name' || data.type == 'phone' || data.type == 'address')
+        && data.query is string
+        && data.query.size() <= 500
+        && (!data.keys().hasAny(['location']) || (data.location is string && data.location.size() <= 256))
+        && data.results is list
+        && data.results.size() <= 100
+        && (data.results.size() == 0 || isValidPersonRecord(data.results[0]))
+        && data.createdAt == request.time;
+    }
+
+    function isValidExportHistoryItem(data) {
+      return data.keys().hasAll(['userId', 'userEmail', 'spreadsheetId', 'spreadsheetUrl', 'queryType', 'queryText', 'exportedCount', 'exportedAt'])
+        && data.keys().size() == 8
+        && data.userId == request.auth.uid
+        && data.userEmail == request.auth.token.email
+        && data.spreadsheetId is string
+        && data.spreadsheetId.size() <= 128
+        && data.spreadsheetUrl is string
+        && data.spreadsheetUrl.size() <= 512
+        && data.queryType is string
+        && (data.queryType == 'name' || data.queryType == 'phone' || data.queryType == 'address')
+        && data.queryText is string
+        && data.queryText.size() <= 500
+        && data.exportedCount is int
+        && data.exportedCount >= 0
+        && data.exportedAt == request.time;
+    }
+
+    // Match patterns and collection rules
+    match /search_cache/{cacheId} {
+      allow read: if true; // Let everyone read search caches to prevent duplicate API lookups
+      
+      allow create: if isEmailVerified()
+        && isValidId(cacheId)
+        && isValidSearchCacheItem(incoming());
+        
+      allow update: if isEmailVerified()
+        && isValidId(cacheId)
+        && isValidSearchCacheItem(incoming())
+        && incoming().query == existing().query
+        && incoming().type == existing().type; // Caches cannot have their base query mutated
+        
+      allow delete: if false; // Cached searches are immortal and cannot be deleted to force lookup reload
+    }
+
+    match /export_history/{exportId} {
+      allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isEmailVerified()
+        && isValidId(exportId)
+        && isValidExportHistoryItem(incoming());
+        
+      allow update, delete: if false; // Export logs are strictly immutable and cannot be tampered with
+    }
+  }
+}

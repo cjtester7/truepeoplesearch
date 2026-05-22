@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "PersonRecord": {
+      "title": "PersonRecord",
+      "description": "Represents public directory details of a person found via search.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Full name of the person"
+        },
+        "age": {
+          "type": "string",
+          "description": "Age of the person (or N/A)"
+        },
+        "currentAddress": {
+          "type": "string",
+          "description": "Current registered or last known physical address"
+        },
+        "pastAddresses": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of historical physical addresses"
+        },
+        "phoneNumbers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of known phone numbers"
+        },
+        "relatives": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of associated names / relatives"
+        },
+        "emailAddresses": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of known email addresses"
+        }
+      },
+      "required": ["name", "age", "currentAddress", "pastAddresses", "phoneNumbers", "relatives", "emailAddresses"]
+    },
+    "SearchCacheItem": {
+      "title": "SearchCacheItem",
+      "description": "Cached search results stored in the Firestore database.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["name", "phone", "address"],
+          "description": "Type of the search query"
+        },
+        "query": {
+          "type": "string",
+          "description": "Normalized lowercase search query criteria"
+        },
+        "location": {
+          "type": "string",
+          "description": "City and State limiters (if any)"
+        },
+        "results": {
+          "type": "array",
+          "items": { "$ref": "#/entities/PersonRecord" },
+          "description": "The search findings parsed by Gemini"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of search ingestion"
+        }
+      },
+      "required": ["type", "query", "results", "createdAt"]
+    },
+    "ExportHistoryItem": {
+      "title": "ExportHistoryItem",
+      "description": "Auditable log of spreadsheet exports done by the user.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The Google User Unique ID"
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "Email address of the exporter"
+        },
+        "spreadsheetId": {
+          "type": "string",
+          "description": "ID of the exported Google Sheet"
+        },
+        "spreadsheetUrl": {
+          "type": "string",
+          "description": "Hyperlink of the exported Google Sheet"
+        },
+        "queryType": {
+          "type": "string",
+          "description": "The search type of the exported data"
+        },
+        "queryText": {
+          "type": "string",
+          "description": "The search query of the exported data"
+        },
+        "exportedCount": {
+          "type": "integer",
+          "description": "Number of rows successfully written"
+        },
+        "exportedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp indicating when export happened"
+        }
+      },
+      "required": ["userId", "userEmail", "spreadsheetId", "spreadsheetUrl", "queryType", "queryText", "exportedCount", "exportedAt"]
+    }
+  },
+  "firestore": {
+    "search_cache/{cacheId}": {
+      "schema": "SearchCacheItem",
+      "description": "Directory caches index to prevent redundant web lookup sessions."
+    },
+    "export_history/{exportId}": {
+      "schema": "ExportHistoryItem",
+      "description": "User audit trail for historical Google Sheets exports."
+    }
+  }
+}
