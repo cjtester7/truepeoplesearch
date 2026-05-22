@@ -203,19 +203,8 @@ export default function App() {
       });
 
       if (!response.ok) {
-        let errMsg = "";
-        try {
-          const errText = await response.text();
-          try {
-            const errJson = JSON.parse(errText);
-            errMsg = errJson.error || errJson.message || errText;
-          } catch {
-            errMsg = errText || `HTTP Client Error ${response.status}`;
-          }
-        } catch {
-          errMsg = `Network connection interrupted (Status ${response.status})`;
-        }
-        throw new Error(errMsg || `Internal request failed with status: ${response.status}`);
+        const errObj = await response.json().catch(() => ({}));
+        throw new Error(errObj.error || `Internal request failed: ${response.statusText}`);
       }
 
       const bodyData = await response.json();
