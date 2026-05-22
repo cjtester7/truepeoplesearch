@@ -174,6 +174,89 @@ export default function App() {
     setErrorMessage(null);
     setExportedSheetUrl(null);
 
+    if (criteria.isDemo) {
+      setTimeout(() => {
+        const queryTerm = criteria.query || "Sarah Smith";
+        const locationTerm = criteria.location || "Los Angeles, CA";
+
+        let records: PersonRecord[] = [];
+
+        if (criteria.type === "name") {
+          records = [
+            {
+              name: queryTerm.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" "),
+              age: "47",
+              currentAddress: `1280 Sunset Blvd, Apt 4B, ${locationTerm}`,
+              pastAddresses: [
+                `940 N Figueroa St, Los Angeles, CA 90012`,
+                `1001 Broad St, Philadelphia, PA 19147`,
+                `550 Pine St, San Francisco, CA 94104`
+              ],
+              phoneNumbers: [`(213) 555-0188`, `(215) 555-0144`],
+              relatives: ["David Watson", "Jane Watson", "Emily Watson"],
+              emailAddresses: [`${queryTerm.toLowerCase().replace(/\s/g, "")}@example.com`, `${queryTerm.toLowerCase().replace(/\s/g, "")}.pro@gmail.com`]
+            },
+            {
+              name: `${queryTerm.split(" ")[0]} R. Watson`,
+              age: "44",
+              currentAddress: `420 Melrose Ave, ${locationTerm}`,
+              pastAddresses: [
+                `770 Broadway, New York, NY 10003`,
+                `140 S Hope St, Los Angeles, CA 90012`
+              ],
+              phoneNumbers: [`(213) 555-0199`],
+              relatives: ["John Watson", "Mary Watson"],
+              emailAddresses: [`${queryTerm.split(" ")[0].toLowerCase()}w@gmail.com`]
+            }
+          ];
+        } else if (criteria.type === "phone") {
+          const formattedPhone = queryTerm.replace(/\D/g, "");
+          const cleanPhone = formattedPhone.length === 10 
+            ? `(${formattedPhone.slice(0,3)}) ${formattedPhone.slice(3,6)}-${formattedPhone.slice(6)}`
+            : queryTerm;
+
+          records = [
+            {
+              name: "Eleanor Vance",
+              age: "52",
+              currentAddress: `808 S Grand Ave, Los Angeles, CA 90017`,
+              pastAddresses: [`111 Ocean Ave, Brooklyn, NY 11225`, `2330 Peachtree Rd, Atlanta, GA 30309`],
+              phoneNumbers: [cleanPhone, `(310) 555-0105`],
+              relatives: ["Arthur Vance", "Thomas Vance"],
+              emailAddresses: ["e.vance@whitepages.org", "eleanorv@workplace.net"]
+            }
+          ];
+        } else if (criteria.type === "address") {
+          records = [
+            {
+              name: "Arthur Pendelton",
+              age: "61",
+              currentAddress: `${queryTerm}, ${locationTerm}`,
+              pastAddresses: [`450 Sutter St, San Francisco, CA 94108`, `12 Birdcliff Rd, Woodstock, NY 12498`],
+              phoneNumbers: [`(415) 555-0130`, `(845) 555-0112`],
+              relatives: ["Clara Pendelton", "Gwen Pendelton"],
+              emailAddresses: ["a.pendelton@outlook.com"]
+            }
+          ];
+        }
+
+        setSearchResults(records);
+        setSearchSources([
+          {
+            title: "TruePeopleSearch Simulator (Sandbox Mode)",
+            url: "https://www.truepeoplesearch.com"
+          },
+          {
+            title: "Mock Records Directory",
+            url: "#"
+          }
+        ]);
+        setIsCachedResult(false);
+        setIsSearchLoading(false);
+      }, 1000);
+      return;
+    }
+
     const docId = getCacheDocId(criteria);
     const cacheRef = doc(db, "search_cache", docId);
 

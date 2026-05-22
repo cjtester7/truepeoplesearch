@@ -84,27 +84,45 @@ Location Filter (City, State): ${location || "None specified"}
 
 Search Guidelines:
 1. Search public directories, whitepages registries, and people search sites (such as truepeoplesearch, fastpeoplesearch, whitepages, spokeo, clustrmaps, etc.) for records matching the criteria.
-2. Compile up to 10 potential matching individuals based on the search snippets and live details.
-3. INCLUDE every matching person found, even if their record is incomplete.
-4. CRITICAL: If a specific field (such as pastAddresses, phoneNumbers, relatives, or emailAddresses) is not available in the search snippets, use "N/A" for strings, or an empty array [] for arrays. DO NOT discard or skip the individual completely, and DO NOT leave fields out.
+2. Compile potential matching individuals based on the search snippets and live details.
+3. For each matching person found, summarize their name, estimated age, current or last known address, prior addresses, associated phone numbers, relatives or close associates, and email addresses.
+4. If no records matching the query are found, state "No matches found on public directories."`;
 
-Consolidate and format the findings strictly as a JSON array where each object has these exact fields:
-   - name: string (Full name of the person)
-   - age: string (Age estimate, e.g. "45", or "N/A" if unknown)
-   - currentAddress: string (Current or last known physical address, or "N/A" if unknown)
-   - pastAddresses: array of strings (Past residential addresses, return empty array [] if none found)
-   - phoneNumbers: array of strings (Known telephone numbers, return empty array [] if none found)
-   - relatives: array of strings (Names of relatives, associates or family members, return empty array [] if none found)
-   - emailAddresses: array of strings (Known email addresses, return empty array [] if none found)
-
-If no matching people are found on public whitepages or directory web indexes, return an empty array [].
-Your final output must be strictly raw JSON matching the required schema. Ensure values are standard types.`;
-
-      const response = await client.models.generateContent({
+      // Step 1: Perform live web search grounding using Gemini
+      const groundingResponse = await client.models.generateContent({
         model: "gemini-3.5-flash",
         contents: prompt,
         config: {
-          tools: [{ googleSearch: {} }],
+          tools: [{ googleSearch: {} }]
+        }
+      });
+
+      const groundedText = groundingResponse.text || "No matches found on public directories.";
+
+      // Step 2: Use Gemini to parse the grounded text into strict JSON conforming to our schema
+      const parsePrompt = `You are a data-formatting assistant. Convert the following public records grounding search results into a clean, structured JSON array of matching individuals.
+      
+Each object in the array MUST conform to this exact schema structure:
+- name: string (Full name of the person)
+- age: string (Age estimate, e.g. "45", or "N/A" if unknown)
+- currentAddress: string (Current/last known address, or "N/A" if unknown)
+- pastAddresses: array of strings (List of previous addresses, or empty array [])
+- phoneNumbers: array of strings (List of telephone numbers, or empty array [])
+- relatives: array of strings (Names of family members or close associates, or empty array [])
+- emailAddresses: array of strings (Associated email addresses, or empty array [])
+
+Grounding Results:
+"""
+${groundedText}
+"""
+
+Ensure you extract up to 10 matching individuals. If the grounding results state that no matches were found, or contain no clear personal listings, return an empty array [].
+Your output must contain only raw JSON without any markdown formatting wrappers or extra commentary.`;
+
+      const jsonResponse = await client.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: parsePrompt,
+        config: {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.ARRAY,
@@ -135,15 +153,13 @@ Your final output must be strictly raw JSON matching the required schema. Ensure
                   description: "List of associated email addresses"
                 }
               },
-              // Only name is strictly required by the JSON schema parser to prevent discarding
-              // listings with missing fields during the validation stage.
               required: ["name"]
             }
           }
         }
       });
 
-      const responseText = response.text || "[]";
+      const responseText = jsonResponse.text || "[]";
       let results = [];
       try {
         const parsed = JSON.parse(responseText);
@@ -166,8 +182,8 @@ Your final output must be strictly raw JSON matching the required schema. Ensure
         return res.status(500).json({ error: "The search engine response could not be parsed. Please try again." });
       }
 
-      // Collect sources from search grounding metadata
-      const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
+      // Collect sources from the initial search grounding metadata
+      const sources = groundingResponse.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
         title: chunk.web?.title || "Public Registry Index",
         url: chunk.web?.uri || ""
       })).filter((s: any) => s.url) || [];

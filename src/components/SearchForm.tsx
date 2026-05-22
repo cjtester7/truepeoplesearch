@@ -74,6 +74,14 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
     }
   });
 
+  const [isDemo, setIsDemo] = useState(() => {
+    try {
+      return localStorage.getItem("tps_isDemo") === "true";
+    } catch {
+      return false;
+    }
+  });
+
   // Automatically save state changes into localStorage
   useEffect(() => {
     try {
@@ -85,10 +93,11 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
       localStorage.setItem("tps_street", street);
       localStorage.setItem("tps_city", city);
       localStorage.setItem("tps_stateCode", stateCode);
+      localStorage.setItem("tps_isDemo", String(isDemo));
     } catch (err) {
       console.warn("Failed to write to localStorage:", err);
     }
-  }, [activeTab, firstName, lastName, location, phone, street, city, stateCode]);
+  }, [activeTab, firstName, lastName, location, phone, street, city, stateCode, isDemo]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +122,8 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
     onSearch({
       type: activeTab,
       query,
-      location: combinedLocation
+      location: combinedLocation,
+      isDemo
     });
   };
 
@@ -288,6 +298,21 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
             </div>
           </div>
         )}
+
+        {/* Toggle Sandbox Demo Mode */}
+        <div className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-100">
+          <input
+            id="checkbox-demo"
+            type="checkbox"
+            checked={isDemo}
+            onChange={(e) => setIsDemo(e.target.checked)}
+            className="mt-0.5 rounded text-slate-800 focus:ring-slate-500 cursor-pointer h-3.5 w-3.5"
+          />
+          <label htmlFor="checkbox-demo" className="text-[10px] text-slate-500 font-medium select-none cursor-pointer leading-tight">
+            <span className="font-bold text-slate-700 block mb-0.5">Sandbox Mode</span>
+            By-pass live AI quotas with custom simulated data for instant testing & spreadsheets formatting.
+          </label>
+        </div>
 
         {/* Action Button Strip */}
         <div className="flex flex-col pt-3 border-t border-slate-100">

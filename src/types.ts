@@ -14,6 +14,7 @@ export interface SearchCriteria {
   type: SearchType;
   query: string;
   location: string;
+  isDemo?: boolean;
 }
 
 export interface SearchCacheItem {
